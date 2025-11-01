@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.log
+
+# Data files (optional - uncomment to ignore processed data)
+# ml_data/*.csv
+# *.parquet
+
+# ETL logs
+archive/logs/*.log
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Secrets
+db_config.yaml
+*.env
+.env
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

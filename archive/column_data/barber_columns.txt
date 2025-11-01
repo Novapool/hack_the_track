@@ -1,0 +1,19 @@
+Track: barber
+================================================================================
+
+R1_barber_lap_end.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R1_barber_lap_start.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R1_barber_lap_time.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R1_barber_telemetry_data.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'telemetry_name', 'telemetry_value', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R2_barber_lap_end.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R2_barber_lap_start.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R2_barber_lap_time.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+R2_barber_telemetry_data.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'telemetry_name', 'telemetry_value', 'timestamp', 'vehicle_id', 'vehicle_number']
+

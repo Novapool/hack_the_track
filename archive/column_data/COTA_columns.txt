@@ -1,0 +1,25 @@
+Track: COTA
+================================================================================
+
+Race 1:
+----------------------------------------
+  COTA_lap_end_time_R1.csv = ['meta_source', 'meta_time', 'meta_event', 'meta_session', 'timestamp', 'vehicle_id', 'outing', 'lap', 'expire_at', 'value']
+
+  COTA_lap_start_time_R1.csv = ['meta_source', 'meta_time', 'meta_event', 'meta_session', 'timestamp', 'vehicle_id', 'outing', 'lap', 'expire_at', 'value']
+
+  COTA_lap_time_R1.csv = ['meta_source', 'meta_time', 'meta_event', 'meta_session', 'timestamp', 'vehicle_id', 'outing', 'lap', 'value', 'expire_at']
+
+  R1_cota_telemetry_data.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'telemetry_name', 'telemetry_value', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+
+Race 2:
+----------------------------------------
+  COTA_lap_end_time_R2.csv = ['meta_source', 'meta_time', 'meta_event', 'meta_session', 'timestamp', 'vehicle_id', 'outing', 'lap', 'expire_at', 'value']
+
+  COTA_lap_start_time_R2.csv = ['meta_source', 'meta_time', 'meta_event', 'meta_session', 'timestamp', 'vehicle_id', 'outing', 'lap', 'expire_at', 'value']
+
+  COTA_lap_time_R2.csv = ['meta_source', 'meta_time', 'meta_event', 'meta_session', 'timestamp', 'vehicle_id', 'outing', 'lap', 'value', 'expire_at']
+
+  R2_cota_telemetry_data.csv = ['expire_at', 'lap', 'meta_event', 'meta_session', 'meta_source', 'meta_time', 'original_vehicle_id', 'outing', 'telemetry_name', 'telemetry_value', 'timestamp', 'vehicle_id', 'vehicle_number']
+
+
