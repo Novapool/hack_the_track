@@ -1,0 +1,56 @@
+# GPU-Enabled Requirements for Windows ML Training
+# Install on Windows after installing requirements.txt
+#
+# Prerequisites:
+# - NVIDIA GPU with CUDA support (GTX 1060+ recommended)
+# - Latest NVIDIA drivers installed
+# - Python 3.11+
+#
+# Installation:
+#   pip install -r requirements.txt  # Install base requirements first
+#   pip install -r requirements-gpu.txt  # Then install GPU-enabled packages
+
+# XGBoost with GPU Support
+# Includes CUDA runtime - no separate CUDA Toolkit installation required!
+xgboost[gpu]>=2.0.0
+
+# CuPy: CUDA-accelerated NumPy (optional but recommended)
+# Note: Choose version matching your CUDA version
+# For CUDA 12.x (most recent GPUs):
+cupy-cuda12x>=12.0.0
+
+# For CUDA 11.x (older GPUs), use this instead:
+# cupy-cuda11x>=11.0.0
+
+# GPU-accelerated machine learning libraries (optional)
+# Uncomment if you want to experiment with deep learning later
+
+# PyTorch with CUDA support (for neural networks)
+# torch>=2.0.0+cu121 --index-url https://download.pytorch.org/whl/cu121
+# torchvision>=0.15.0+cu121 --index-url https://download.pytorch.org/whl/cu121
+
+# TensorFlow with GPU support (alternative to PyTorch)
+# tensorflow[and-cuda]>=2.15.0
+
+# RAPIDS (GPU-accelerated data science - advanced)
+# Note: Requires conda installation, not pip
+# cudf-cu12>=23.10.0
+# cuml-cu12>=23.10.0
+
+# Performance monitoring
+# nvidia-ml-py3>=11.0.0  # Python bindings for nvidia-smi (optional)
+
+# Notes:
+# 1. XGBoost GPU is the main requirement for this project
+# 2. CuPy provides GPU acceleration for NumPy operations (optional)
+# 3. PyTorch/TensorFlow are for future neural network experiments
+# 4. RAPIDS requires conda and is for advanced GPU-accelerated data processing
+#
+# Memory requirements:
+# - XGBoost: ~2-4 GB GPU memory for this dataset (2,545 samples)
+# - Ensure at least 6 GB GPU memory for comfortable training
+#
+# Troubleshooting:
+# - If installation fails, ensure NVIDIA drivers are up to date
+# - Check GPU compatibility: https://developer.nvidia.com/cuda-gpus
+# - For CUDA version, run: nvidia-smi (top right corner shows CUDA version)
