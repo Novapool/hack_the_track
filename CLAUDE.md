@@ -56,7 +56,7 @@ db_config = {
     'host': 'localhost',
     'database': 'gr_cup_racing',
     'user': 'postgres',
-    'password': ''
+    'password': 'password'
 }
 ```
 

@@ -1,0 +1,73 @@
+{
+  "best_model": "Random Forest",
+  "best_test_r2": 0.49277735403144185,
+  "best_test_mae": 0.38890857626543107,
+  "best_test_rmse": 0.7437023862374307,
+  "training_date": "2025-11-01 21:59:28",
+  "training_samples": 2036,
+  "test_samples": 509,
+  "features": [
+    "avg_brake_front",
+    "max_brake_front",
+    "avg_brake_rear",
+    "max_brake_rear",
+    "avg_lateral_g",
+    "max_lateral_g",
+    "avg_long_g",
+    "max_accel_g",
+    "max_brake_g",
+    "steering_variance",
+    "avg_steering_angle",
+    "avg_throttle_blade",
+    "avg_speed",
+    "max_speed",
+    "min_speed",
+    "avg_rpm",
+    "max_rpm",
+    "lap_in_stint"
+  ],
+  "all_models": {
+    "Linear Regression": {
+      "test_r2": 0.2429034266840716,
+      "test_mae": 0.5895563084481077,
+      "test_rmse": 0.9086057850190548,
+      "cv_mean": 0.3097677632372385,
+      "cv_std": 0.06589205102789322
+    },
+    "Ridge Regression": {
+      "test_r2": 0.24637880193663775,
+      "test_mae": 0.5862367512591271,
+      "test_rmse": 0.9065179547865257,
+      "cv_mean": 0.31178710999107306,
+      "cv_std": 0.06010000113511868
+    },
+    "Lasso Regression": {
+      "test_r2": 0.2336451959969562,
+      "test_mae": 0.5939074774326948,
+      "test_rmse": 0.914144392187352,
+      "cv_mean": 0.30218811743274554,
+      "cv_std": 0.05299965385196013
+    },
+    "Random Forest": {
+      "test_r2": 0.49277735403144185,
+      "test_mae": 0.38890857626543107,
+      "test_rmse": 0.7437023862374307,
+      "cv_mean": 0.46279595668990386,
+      "cv_std": 0.09232736591276408
+    },
+    "Gradient Boosting": {
+      "test_r2": 0.46376534202977016,
+      "test_mae": 0.4167105594230166,
+      "test_rmse": 0.7646757140418722,
+      "cv_mean": 0.43839867732217047,
+      "cv_std": 0.09546894438894686
+    },
+    "XGBoost": {
+      "test_r2": 0.4738367636487727,
+      "test_mae": 0.42013323654486273,
+      "test_rmse": 0.757460704415141,
+      "cv_mean": 0.4672519287997832,
+      "cv_std": 0.0784258413478832
+    }
+  }
+}
