@@ -6,7 +6,7 @@
 
 This project analyzes race telemetry data from 7 tracks (Barber, COTA, Indianapolis, Road America, Sebring, Sonoma, VIR) with a focus on tire degradation modeling. The dataset includes high-frequency telemetry, lap timing, and race results stored in PostgreSQL with ML-ready preprocessing pipelines.
 
-**Status**: ✅ Database loaded (3,257 laps) | ✅ Preprocessing pipeline ready | ⏭️ Model training
+**Status**: ✅ Database loaded (3,257 laps) | ✅ ML Model trained (R² = 0.631) | 🎨 Interactive Dashboard
 
 ## Quick Start
 
@@ -60,6 +60,41 @@ model = RandomForestRegressor()
 model.fit(X, y)
 ```
 
+## 🏁 Interactive Tire Degradation Dashboard
+
+**NEW!** Interactive Streamlit dashboard for visualizing tire degradation predictions in real-time.
+
+### Features
+- 🏁 **Live Track Visualization** - Animated racing line with degradation overlay on all 7 tracks
+- 🎮 **What-If Analysis** - Interactive sliders to test driving style changes
+- 👥 **Driver Comparison** - Side-by-side tire management analysis
+- 📊 **ML Predictions** - Real-time tire wear forecasting using Random Forest model
+
+### Quick Start
+
+```bash
+# Install dashboard dependencies
+pip install -r requirements.txt
+
+# Run the dashboard
+streamlit run hackathon_app/app.py
+
+# Open browser to http://localhost:8501
+```
+
+### Model Performance
+- **R² Score:** 0.631 (63% accuracy)
+- **MAE:** 0.375 seconds/lap
+- **Training Data:** 2,036 laps, 23 features
+- **Features:** Weather conditions, driving aggression, stint position
+
+### Demo Flow
+1. **Track Visualization** - Watch animated laps with degradation heatmap
+2. **What-If Scenarios** - "What if I brake 20% softer?" → See prediction change
+3. **Driver Comparison** - Compare tire management efficiency between drivers
+
+📖 **Full Documentation:** [docs/HACKATHON_DASHBOARD.md](docs/HACKATHON_DASHBOARD.md)
+
 ## Project Structure
 
 ```
@@ -69,9 +104,26 @@ hack_the_track/
 ├── db_config.yaml            # Database configuration
 ├── Hackathon 2025.pdf        # Challenge documentation
 │
+├── hackathon_app/            # 🎨 Interactive Dashboard (NEW!)
+│   ├── app.py                # Main Streamlit landing page
+│   ├── pages/                # Dashboard pages
+│   │   ├── 1_🏁_Track_Visualization.py
+│   │   ├── 2_🎮_What_If_Analysis.py
+│   │   └── 3_👥_Driver_Comparison.py
+│   ├── utils/                # Dashboard utilities
+│   │   ├── data_loader.py    # Database queries
+│   │   ├── model_predictor.py # ML predictions
+│   │   └── track_plotter.py  # Visualizations
+│   └── assets/               # Track images and branding
+│
 ├── docs/                     # Detailed documentation
 │   ├── DATABASE.md           # Database schema, ETL, querying
-│   └── PREPROCESSING.md      # ML preprocessing pipeline
+│   ├── PREPROCESSING.md      # ML preprocessing pipeline
+│   └── HACKATHON_DASHBOARD.md # Dashboard documentation (NEW!)
+│
+├── models/                   # Trained ML models
+│   ├── tire_degradation_model_random_forest_with_weather.pkl
+│   └── model_metadata_with_weather.json
 │
 ├── src/                      # Source code
 │   └── data_preprocessing.py # TireDegradationPreprocessor class
@@ -86,7 +138,17 @@ hack_the_track/
 │
 ├── ml_data/                  # Processed ML datasets
 │   ├── features_normalized.csv
-│   └── target_degradation.csv
+│   ├── target_degradation.csv
+│   ├── features_with_weather.csv (NEW!)
+│   └── target_with_weather.csv   (NEW!)
+│
+├── track_maps/               # Track circuit maps (PDFs)
+│
+├── notebooks/                # Jupyter notebooks
+│   └── model_training_exploration.ipynb
+│
+├── scripts/                  # Training scripts
+│   └── train_with_weather.py
 │
 ├── examples/                 # Example usage
 │   └── test_preprocessing.py # Demo preprocessing pipeline
@@ -180,6 +242,7 @@ psql -h localhost -U postgres -d gr_cup_racing -f sql/views/create_preprocessing
 
 ## Documentation
 
+- **[docs/HACKATHON_DASHBOARD.md](docs/HACKATHON_DASHBOARD.md)** - 🎨 Interactive dashboard guide (NEW!)
 - **[docs/DATABASE.md](docs/DATABASE.md)** - Database schema, ETL pipeline, SQL queries
 - **[docs/PREPROCESSING.md](docs/PREPROCESSING.md)** - ML preprocessing, feature engineering, API reference
 - **[Hackathon 2025.pdf](Hackathon%202025.pdf)** - Official challenge documentation

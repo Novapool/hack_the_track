@@ -1,0 +1,46 @@
+{
+  "best_model": "Random Forest (with weather)",
+  "best_test_r2": 0.6308237287878908,
+  "best_test_mae": 0.3750506466811032,
+  "best_test_rmse": 0.6098363133152146,
+  "training_date": "2025-11-01 23:54:54",
+  "training_samples": 1535,
+  "test_samples": 384,
+  "features": [
+    "air_temp",
+    "track_temp",
+    "humidity",
+    "wind_speed",
+    "temp_delta",
+    "avg_brake_front",
+    "max_brake_front",
+    "avg_brake_rear",
+    "max_brake_rear",
+    "avg_lateral_g",
+    "max_lateral_g",
+    "avg_long_g",
+    "max_accel_g",
+    "max_brake_g",
+    "steering_variance",
+    "avg_steering_angle",
+    "avg_throttle_blade",
+    "avg_speed",
+    "max_speed",
+    "min_speed",
+    "avg_rpm",
+    "max_rpm",
+    "lap_in_stint"
+  ],
+  "weather_features": [
+    "air_temp",
+    "track_temp",
+    "humidity",
+    "wind_speed",
+    "temp_delta"
+  ],
+  "baseline_comparison": {
+    "baseline_r2": 0.4928,
+    "r2_improvement": 0.13802372878789082,
+    "r2_improvement_pct": 28.008061848192128
+  }
+}

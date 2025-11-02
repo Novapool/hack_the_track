@@ -318,7 +318,7 @@ if __name__ == "__main__":
         'host': 'localhost',
         'database': 'gr_cup_racing',
         'user': 'postgres',
-        'password': ''
+        'password': 'password'
     }
 
     # Initialize preprocessor

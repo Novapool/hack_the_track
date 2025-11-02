@@ -28,3 +28,9 @@ ipykernel>=6.25.0
 
 # Additional ML Visualization
 shap>=0.45.0  # Feature importance and model interpretation
+
+# Interactive Dashboard
+streamlit>=1.31.0  # Main dashboard framework
+streamlit-plotly-events>=0.0.6  # Interactive Plotly charts in Streamlit
+pdf2image>=1.16.3  # Convert PDF track maps to images
+Pillow>=10.2.0  # Image processing for track visualizations

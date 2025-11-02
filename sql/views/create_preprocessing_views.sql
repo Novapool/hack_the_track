@@ -14,6 +14,13 @@ SELECT
     r.track_id,
     r.race_date,
 
+    -- Weather conditions (matched to lap start time)
+    w.air_temp,
+    w.track_temp,
+    w.humidity,
+    w.wind_speed,
+    (w.track_temp - w.air_temp) as temp_delta,
+
     -- Brake aggression
     AVG(tr.pbrake_f) as avg_brake_front,
     MAX(tr.pbrake_f) as max_brake_front,
@@ -53,10 +60,19 @@ FROM laps l
 JOIN sessions s ON l.session_id = s.session_id
 JOIN telemetry_readings tr ON l.lap_id = tr.lap_id
 JOIN races r ON s.race_id = r.race_id
+LEFT JOIN LATERAL (
+    SELECT air_temp, track_temp, humidity, wind_speed
+    FROM weather_data w2
+    WHERE w2.race_id = r.race_id
+    ORDER BY ABS(EXTRACT(EPOCH FROM (w2.timestamp - l.lap_start_time)))
+    LIMIT 1
+) w ON true
 WHERE l.lap_duration > 0
   AND l.is_valid_lap = true
+  AND l.lap_number < 32768
 GROUP BY l.lap_id, s.race_id, l.session_id, l.vehicle_id, l.lap_number,
-         l.lap_duration, r.track_id, r.race_date;
+         l.lap_duration, r.track_id, r.race_date,
+         w.air_temp, w.track_temp, w.humidity, w.wind_speed;
 
 -- View 2: Stint progression with degradation indicators
 -- Shows how lap times degrade over a stint

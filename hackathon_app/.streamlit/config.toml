@@ -1,0 +1,26 @@
+# Streamlit Configuration for Tire Whisperer Dashboard
+# Toyota GR Cup Racing Theme
+
+[theme]
+# Toyota Red as primary color
+primaryColor = "#E50000"
+
+# Dark background for professional racing aesthetic
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1E2127"
+
+# High contrast text
+textColor = "#FAFAFA"
+
+# Clean sans-serif font
+font = "sans serif"
+
+[server]
+# Dashboard settings
+headless = true
+enableCORS = false
+port = 8501
+
+[browser]
+# Auto-open browser on startup
+gatherUsageStats = false
