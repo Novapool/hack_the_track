@@ -36,7 +36,7 @@ archive/logs/*.log
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
-*.ipynb
+
 
 # Secrets
 db_config.yaml
