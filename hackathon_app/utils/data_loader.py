@@ -7,7 +7,7 @@ Uses Streamlit's caching to minimize database queries and improve performance.
 
 import streamlit as st
 import pandas as pd
-import psycopg2
+from sqlalchemy import create_engine
 from typing import Dict, List, Optional, Tuple
 
 
@@ -21,14 +21,15 @@ DB_CONFIG = {
 }
 
 
-def get_db_connection():
+def get_db_engine():
     """
-    Create a database connection.
+    Create a SQLAlchemy database engine.
 
     Returns:
-        psycopg2 connection object
+        SQLAlchemy engine object
     """
-    return psycopg2.connect(**DB_CONFIG)
+    connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+    return create_engine(connection_string)
 
 
 @st.cache_data(ttl=600)  # Cache for 10 minutes
@@ -70,12 +71,9 @@ def get_available_tracks() -> pd.DataFrame:
     ORDER BY track_name;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn)
-        return df
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine)
+    return df
 
 
 @st.cache_data(ttl=600)
@@ -103,7 +101,7 @@ def get_available_laps(track_name: str, limit: int = 100) -> pd.DataFrame:
             AND tr.vbox_lat_min IS NOT NULL
             LIMIT 1
         ) as has_gps,
-        COUNT(tr.reading_id) as telemetry_count
+        COUNT(tr.telemetry_id) as telemetry_count
     FROM laps l
     JOIN sessions s ON l.session_id = s.session_id
     JOIN races r ON s.race_id = r.race_id
@@ -118,12 +116,9 @@ def get_available_laps(track_name: str, limit: int = 100) -> pd.DataFrame:
     LIMIT %s;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn, params=(track_name, limit))
-        return df
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine, params=(track_name, limit))
+    return df
 
 
 @st.cache_data(ttl=600)
@@ -158,12 +153,9 @@ def load_lap_telemetry(lap_id: int) -> pd.DataFrame:
     ORDER BY meta_time;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn, params=(lap_id,))
-        return df
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine, params=(lap_id,))
+    return df
 
 
 @st.cache_data(ttl=600)
@@ -190,14 +182,11 @@ def load_lap_gps(lap_id: int) -> Optional[pd.DataFrame]:
     ORDER BY meta_time;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn, params=(lap_id,))
-        if df.empty:
-            return None
-        return df
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine, params=(lap_id,))
+    if df.empty:
+        return None
+    return df
 
 
 @st.cache_data(ttl=600)
@@ -233,14 +222,31 @@ def get_vehicle_stats(vehicle_id: int) -> Dict:
     GROUP BY v.vehicle_id, v.car_number, v.chassis_number;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn, params=(vehicle_id,))
-        if df.empty:
-            return {}
-        return df.iloc[0].to_dict()
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine, params=(vehicle_id,))
+    if df.empty:
+        return {}
+
+    # Convert to dict and replace None values with defaults
+    stats = df.iloc[0].to_dict()
+
+    # Set default values for None entries to prevent formatting errors
+    defaults = {
+        'avg_lap_time': 0.0,
+        'avg_brake_front': 0.0,
+        'max_brake_front': 0.0,
+        'avg_lateral_g': 0.0,
+        'max_lateral_g': 0.0,
+        'avg_speed': 0.0,
+        'max_speed': 0.0,
+        'steering_variance': 0.0
+    }
+
+    for key, default_value in defaults.items():
+        if key in stats and stats[key] is None:
+            stats[key] = default_value
+
+    return stats
 
 
 @st.cache_data(ttl=600)
@@ -304,14 +310,11 @@ def get_lap_features(lap_id: int) -> Optional[pd.Series]:
     GROUP BY l.lap_id, l.lap_number, wd.air_temp, wd.track_temp, wd.humidity, wd.wind_speed;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn, params=(lap_id,))
-        if df.empty:
-            return None
-        return df.iloc[0]
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine, params=(lap_id,))
+    if df.empty:
+        return None
+    return df.iloc[0]
 
 
 @st.cache_data(ttl=600)
@@ -336,12 +339,9 @@ def get_all_vehicles() -> pd.DataFrame:
     ORDER BY v.car_number;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn)
-        return df
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine)
+    return df
 
 
 @st.cache_data(ttl=600)
@@ -375,11 +375,8 @@ def get_lap_metadata(lap_id: int) -> Dict:
     WHERE l.lap_id = %s;
     """
 
-    conn = get_db_connection()
-    try:
-        df = pd.read_sql(query, conn, params=(lap_id,))
-        if df.empty:
-            return {}
-        return df.iloc[0].to_dict()
-    finally:
-        conn.close()
+    engine = get_db_engine()
+    df = pd.read_sql(query, engine, params=(lap_id,))
+    if df.empty:
+        return {}
+    return df.iloc[0].to_dict()

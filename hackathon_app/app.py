@@ -102,7 +102,7 @@ try:
             'laps_with_gps': 'GPS Laps',
             'gps_coverage_pct': 'GPS Coverage %'
         }),
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
 
@@ -162,7 +162,7 @@ with col1:
     - GPS-based degradation heatmap
     - Interactive lap selection
     """)
-    if st.button("🏁 Go to Track Visualization", use_container_width=True):
+    if st.button("🏁 Go to Track Visualization", width='stretch'):
         st.switch_page("pages/1_🏁_Track_Visualization.py")
 
 with col2:
@@ -174,7 +174,7 @@ with col2:
     - Change steering smoothness
     - See instant predictions
     """)
-    if st.button("🎮 Go to What-If Analysis", use_container_width=True):
+    if st.button("🎮 Go to What-If Analysis", width='stretch'):
         st.switch_page("pages/2_🎮_What_If_Analysis.py")
 
 with col3:
@@ -186,7 +186,7 @@ with col3:
     - Efficiency scoring
     - Coaching insights
     """)
-    if st.button("👥 Go to Driver Comparison", use_container_width=True):
+    if st.button("👥 Go to Driver Comparison", width='stretch'):
         st.switch_page("pages/3_👥_Driver_Comparison.py")
 
 st.markdown("---")
@@ -196,7 +196,7 @@ st.caption("Built with ❤️ for the Toyota GR Cup hackathon | Powered by Strea
 
 # Sidebar
 with st.sidebar:
-    st.image("https://via.placeholder.com/300x100/E50000/FFFFFF?text=Toyota+GR+Cup", use_container_width=True)
+    st.image("https://via.placeholder.com/300x100/E50000/FFFFFF?text=Toyota+GR+Cup", width='stretch')
 
     st.markdown("### About")
     st.markdown("""

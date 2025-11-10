@@ -85,6 +85,16 @@ try:
         st.error("Could not load driver statistics")
         st.stop()
 
+    # Verify essential fields exist
+    required_fields = ['avg_lap_time', 'car_number']
+    for field in required_fields:
+        if field not in driver1_stats or driver1_stats[field] is None:
+            st.error(f"Driver 1 missing required data: {field}")
+            st.stop()
+        if field not in driver2_stats or driver2_stats[field] is None:
+            st.error(f"Driver 2 missing required data: {field}")
+            st.stop()
+
 except Exception as e:
     st.error(f"Error loading driver stats: {e}")
     st.stop()
@@ -167,7 +177,7 @@ try:
         labels
     )
 
-    st.plotly_chart(radar_fig, use_container_width=True)
+    st.plotly_chart(radar_fig, width='stretch')
 
 except Exception as e:
     st.warning(f"Could not create radar chart: {e}")
@@ -179,7 +189,7 @@ st.header("📋 Detailed Statistics")
 
 try:
     comparison_df = create_comparison_table(driver1_stats, driver2_stats)
-    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+    st.dataframe(comparison_df, width='stretch', hide_index=True)
 
 except Exception as e:
     st.warning(f"Could not create comparison table: {e}")
@@ -299,13 +309,13 @@ st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("← What-If Analysis", use_container_width=True):
+    if st.button("← What-If Analysis", width='stretch'):
         st.switch_page("pages/2_🎮_What_If_Analysis.py")
 
 with col2:
-    if st.button("🏠 Home", use_container_width=True):
+    if st.button("🏠 Home", width='stretch'):
         st.switch_page("app.py")
 
 with col3:
-    if st.button("Track Visualization →", use_container_width=True):
+    if st.button("Track Visualization →", width='stretch'):
         st.switch_page("pages/1_🏁_Track_Visualization.py")

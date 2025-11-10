@@ -117,7 +117,7 @@ with col1:
                 gps_data=gps_data,
                 title=f"{selected_track.title()} - Lap {lap_meta['lap_number']}"
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             st.success(f"✅ GPS trace plotted ({len(gps_data):,} data points)")
         else:
@@ -127,7 +127,7 @@ with col1:
                 track_name=selected_track,
                 title=f"{selected_track.title()} - Lap {lap_meta['lap_number']}"
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     except Exception as e:
         st.error(f"Error visualizing track: {e}")
@@ -147,11 +147,11 @@ with col1:
             tcol1, tcol2 = st.columns(2)
 
             with tcol1:
-                st.plotly_chart(speed_fig, use_container_width=True)
-                st.plotly_chart(g_fig, use_container_width=True)
+                st.plotly_chart(speed_fig, width='stretch')
+                st.plotly_chart(g_fig, width='stretch')
 
             with tcol2:
-                st.plotly_chart(brake_fig, use_container_width=True)
+                st.plotly_chart(brake_fig, width='stretch')
 
                 # Telemetry stats
                 st.metric("Telemetry Points", f"{len(telemetry_df):,}")
@@ -179,7 +179,7 @@ with col2:
 
             # Show degradation meter
             deg_fig = create_degradation_meter(predicted_deg)
-            st.plotly_chart(deg_fig, use_container_width=True)
+            st.plotly_chart(deg_fig, width='stretch')
 
             # Interpretation
             st.markdown(f"""
@@ -217,13 +217,13 @@ st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("← Back to Home", use_container_width=True):
+    if st.button("← Back to Home", width='stretch'):
         st.switch_page("app.py")
 
 with col2:
-    if st.button("🎮 What-If Analysis →", use_container_width=True):
+    if st.button("🎮 What-If Analysis →", width='stretch'):
         st.switch_page("pages/2_🎮_What_If_Analysis.py")
 
 with col3:
-    if st.button("👥 Driver Comparison →", use_container_width=True):
+    if st.button("👥 Driver Comparison →", width='stretch'):
         st.switch_page("pages/3_👥_Driver_Comparison.py")

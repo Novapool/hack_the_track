@@ -244,7 +244,7 @@ try:
             })
 
     comparison_df = pd.DataFrame(comparison_data)
-    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+    st.dataframe(comparison_df, width='stretch', hide_index=True)
 
     # Stint projection
     st.markdown("---")
@@ -292,13 +292,13 @@ st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("← Track Visualization", use_container_width=True):
+    if st.button("← Track Visualization", width='stretch'):
         st.switch_page("pages/1_🏁_Track_Visualization.py")
 
 with col2:
-    if st.button("🏠 Home", use_container_width=True):
+    if st.button("🏠 Home", width='stretch'):
         st.switch_page("app.py")
 
 with col3:
-    if st.button("Driver Comparison →", use_container_width=True):
+    if st.button("Driver Comparison →", width='stretch'):
         st.switch_page("pages/3_👥_Driver_Comparison.py")
