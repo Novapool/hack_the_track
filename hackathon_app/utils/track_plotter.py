@@ -13,6 +13,12 @@ import plotly.express as px
 from pathlib import Path
 from PIL import Image
 from typing import Optional, Tuple, List
+import base64
+from io import BytesIO
+from .logger import setup_logger, log_exception
+
+# Setup logger
+logger = setup_logger("track_plotter")
 
 
 # Color scale for degradation heatmap
@@ -44,6 +50,22 @@ def load_track_image(track_name: str) -> Optional[Image.Image]:
     return Image.open(image_path)
 
 
+def pil_image_to_base64(img: Image.Image) -> str:
+    """
+    Convert PIL Image to base64 string for Plotly.
+
+    Args:
+        img: PIL Image object
+
+    Returns:
+        Base64-encoded data URI string
+    """
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    return f"data:image/png;base64,{img_str}"
+
+
 def plot_track_with_overlay(
     track_name: str,
     gps_data: Optional[pd.DataFrame] = None,
@@ -62,81 +84,109 @@ def plot_track_with_overlay(
     Returns:
         Plotly Figure object
     """
-    fig = go.Figure()
+    try:
+        logger.debug(f"Creating track plot for: {track_name}")
+        if gps_data is not None:
+            logger.debug(f"GPS data shape: {gps_data.shape}, columns: {gps_data.columns.tolist()}")
 
-    # Load track image
-    track_img = load_track_image(track_name)
+        fig = go.Figure()
 
-    if track_img is not None:
-        # Add track image as background
-        fig.add_layout_image(
-            dict(
-                source=track_img,
-                xref="x",
-                yref="y",
-                x=0,
-                y=1,
-                sizex=1,
-                sizey=1,
-                sizing="stretch",
-                opacity=0.7,
-                layer="below"
+        # Load track image
+        track_img = load_track_image(track_name)
+
+        if track_img is not None:
+            logger.debug(f"Track image loaded: {track_img.size}")
+            # Convert PIL Image to base64 for Plotly
+            img_base64 = pil_image_to_base64(track_img)
+
+            # Add track image as background
+            fig.add_layout_image(
+                dict(
+                    source=img_base64,
+                    xref="x",
+                    yref="y",
+                    x=0,
+                    y=1,
+                    sizex=1,
+                    sizey=1,
+                    sizing="stretch",
+                    opacity=0.7,
+                    layer="below"
+                )
             )
+        else:
+            logger.warning(f"No track image found for: {track_name}")
+
+        # Add GPS trace if available
+        if gps_data is not None and not gps_data.empty:
+            # Check required columns
+            if 'latitude' not in gps_data.columns or 'longitude' not in gps_data.columns:
+                logger.error(f"GPS data missing required columns. Has: {gps_data.columns.tolist()}")
+                raise ValueError("GPS data must have 'latitude' and 'longitude' columns")
+
+            # Normalize coordinates to [0, 1] range for overlay
+            lat_min, lat_max = gps_data['latitude'].min(), gps_data['latitude'].max()
+            lon_min, lon_max = gps_data['longitude'].min(), gps_data['longitude'].max()
+
+            logger.debug(f"GPS bounds: lat[{lat_min:.6f}, {lat_max:.6f}], lon[{lon_min:.6f}, {lon_max:.6f}]")
+
+            if lat_max > lat_min and lon_max > lon_min:
+                gps_data = gps_data.copy()  # Avoid modifying original
+                gps_data['x'] = (gps_data['longitude'] - lon_min) / (lon_max - lon_min)
+                gps_data['y'] = (gps_data['latitude'] - lat_min) / (lat_max - lat_min)
+
+                # Create scatter plot with color coding
+                if color_values is not None:
+                    logger.debug(f"Adding color-coded GPS trace with {len(color_values)} values")
+                    # Color-coded by degradation or other metric
+                    fig.add_trace(go.Scatter(
+                        x=gps_data['x'],
+                        y=gps_data['y'],
+                        mode='markers+lines',
+                        marker=dict(
+                            size=5,
+                            color=color_values,
+                            colorscale='RdYlGn_r',  # Red-Yellow-Green reversed
+                            showscale=True,
+                            colorbar=dict(title="Degradation<br>(sec/lap)")
+                        ),
+                        line=dict(width=2),
+                        name='Racing Line',
+                        hovertemplate='<b>Lap Position</b><br>Lat: %{customdata[0]:.6f}<br>Lon: %{customdata[1]:.6f}<extra></extra>',
+                        customdata=gps_data[['latitude', 'longitude']].values
+                    ))
+                else:
+                    logger.debug("Adding simple GPS trace")
+                    # Simple trace without color coding
+                    fig.add_trace(go.Scatter(
+                        x=gps_data['x'],
+                        y=gps_data['y'],
+                        mode='markers+lines',
+                        marker=dict(size=4, color='#E50000'),  # Toyota Red
+                        line=dict(width=2, color='#E50000'),
+                        name='Racing Line'
+                    ))
+            else:
+                logger.warning(f"Invalid GPS bounds - not plotting trace")
+
+        # Update layout
+        fig.update_layout(
+            title=title,
+            xaxis=dict(visible=False, range=[0, 1]),
+            yaxis=dict(visible=False, range=[0, 1]),
+            showlegend=False,
+            height=600,
+            margin=dict(l=0, r=0, t=40, b=0),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
 
-    # Add GPS trace if available
-    if gps_data is not None and not gps_data.empty:
-        # Normalize coordinates to [0, 1] range for overlay
-        lat_min, lat_max = gps_data['latitude'].min(), gps_data['latitude'].max()
-        lon_min, lon_max = gps_data['longitude'].min(), gps_data['longitude'].max()
+        logger.info(f"Track plot created successfully for {track_name}")
+        return fig
 
-        if lat_max > lat_min and lon_max > lon_min:
-            gps_data['x'] = (gps_data['longitude'] - lon_min) / (lon_max - lon_min)
-            gps_data['y'] = (gps_data['latitude'] - lat_min) / (lat_max - lat_min)
-
-            # Create scatter plot with color coding
-            if color_values is not None:
-                # Color-coded by degradation or other metric
-                fig.add_trace(go.Scatter(
-                    x=gps_data['x'],
-                    y=gps_data['y'],
-                    mode='markers+lines',
-                    marker=dict(
-                        size=5,
-                        color=color_values,
-                        colorscale='RdYlGn_r',  # Red-Yellow-Green reversed
-                        showscale=True,
-                        colorbar=dict(title="Degradation<br>(sec/lap)")
-                    ),
-                    line=dict(width=2),
-                    name='Racing Line',
-                    hovertemplate='<b>Lap Position</b><br>Lat: %{customdata[0]:.6f}<br>Lon: %{customdata[1]:.6f}<extra></extra>',
-                    customdata=gps_data[['latitude', 'longitude']].values
-                ))
-            else:
-                # Simple trace without color coding
-                fig.add_trace(go.Scatter(
-                    x=gps_data['x'],
-                    y=gps_data['y'],
-                    mode='markers+lines',
-                    marker=dict(size=4, color='#E50000'),  # Toyota Red
-                    line=dict(width=2, color='#E50000'),
-                    name='Racing Line'
-                ))
-
-    # Update layout
-    fig.update_layout(
-        title=title,
-        xaxis=dict(visible=False, range=[0, 1]),
-        yaxis=dict(visible=False, range=[0, 1]),
-        showlegend=False,
-        height=600,
-        margin=dict(l=0, r=0, t=40, b=0),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)'
-    )
-
-    return fig
+    except Exception as e:
+        log_exception(logger, e, f"Error creating track plot for {track_name}")
+        raise
 
 
 def create_telemetry_charts(telemetry_df: pd.DataFrame) -> Tuple[go.Figure, go.Figure, go.Figure]:

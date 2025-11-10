@@ -191,10 +191,16 @@ with col2:
 
             # Feature highlights
             with st.expander("📋 Key Driving Metrics", expanded=True):
-                st.metric("Avg Brake Pressure", f"{lap_features['avg_brake_front']:.1f} bar")
-                st.metric("Max Lateral G", f"{lap_features['max_lateral_g']:.2f} G")
-                st.metric("Avg Speed", f"{lap_features['avg_speed']:.1f} km/h")
-                st.metric("Steering Smoothness", f"{lap_features['steering_variance']:.1f}°")
+                # Use .get() with defaults to handle None values
+                avg_brake = lap_features.get('avg_brake_front', 0.0) or 0.0
+                max_lat_g = lap_features.get('max_lateral_g', 0.0) or 0.0
+                avg_spd = lap_features.get('avg_speed', 0.0) or 0.0
+                steer_var = lap_features.get('steering_variance', 0.0) or 0.0
+
+                st.metric("Avg Brake Pressure", f"{avg_brake:.1f} bar")
+                st.metric("Max Lateral G", f"{max_lat_g:.2f} G")
+                st.metric("Avg Speed", f"{avg_spd:.1f} km/h")
+                st.metric("Steering Smoothness", f"{steer_var:.1f}°")
 
             # Lap info
             with st.expander("ℹ️ Lap Info", expanded=False):

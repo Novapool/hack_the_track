@@ -37,21 +37,21 @@ try:
     with col1:
         st.metric(
             label="Model Accuracy (R² Score)",
-            value=f"{metadata['test_metrics']['r2_score']:.1%}",
+            value=f"{metadata['best_test_r2']:.1%}",
             help="Percentage of tire degradation variance explained by the model"
         )
 
     with col2:
         st.metric(
             label="Prediction Error (MAE)",
-            value=f"{metadata['test_metrics']['mae']:.3f} sec/lap",
+            value=f"{metadata['best_test_mae']:.3f} sec/lap",
             help="Average prediction error in seconds per lap"
         )
 
     with col3:
         st.metric(
             label="Features Analyzed",
-            value=f"{len(metadata['feature_names'])}",
+            value=f"{len(metadata['features'])}",
             help="Number of driving and weather metrics used for predictions"
         )
 
@@ -214,9 +214,9 @@ with st.sidebar:
     try:
         metadata = get_model_metadata()
         st.markdown(f"""
-        - **R² Score**: {metadata['test_metrics']['r2_score']:.3f}
-        - **MAE**: {metadata['test_metrics']['mae']:.3f} sec/lap
-        - **RMSE**: {metadata['test_metrics']['rmse']:.3f} sec/lap
+        - **R² Score**: {metadata['best_test_r2']:.3f}
+        - **MAE**: {metadata['best_test_mae']:.3f} sec/lap
+        - **RMSE**: {metadata['best_test_rmse']:.3f} sec/lap
         - **Training Samples**: {metadata['training_samples']:,}
         - **Test Samples**: {metadata['test_samples']:,}
         """)

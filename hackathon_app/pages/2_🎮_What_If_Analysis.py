@@ -230,8 +230,14 @@ try:
 
     for feature_key, label in feature_labels.items():
         if feature_key in base_features:
-            baseline_val = base_features[feature_key]
-            adjusted_val = modified_features[feature_key]
+            # Handle None values with defaults
+            baseline_val = base_features.get(feature_key, 0.0)
+            adjusted_val = modified_features.get(feature_key, 0.0)
+
+            # Convert None to 0.0 for calculations
+            baseline_val = 0.0 if baseline_val is None else float(baseline_val)
+            adjusted_val = 0.0 if adjusted_val is None else float(adjusted_val)
+
             delta_val = adjusted_val - baseline_val
             delta_pct_val = (delta_val / baseline_val * 100) if baseline_val != 0 else 0
 

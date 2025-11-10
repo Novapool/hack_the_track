@@ -8,8 +8,14 @@ Uses Streamlit's caching to minimize database queries and improve performance.
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Dict, List, Optional, Tuple
+import traceback
+from .logger import setup_logger, log_exception, log_data_operation
 
+
+# Setup logger
+logger = setup_logger("data_loader")
 
 # Database configuration
 DB_CONFIG = {
@@ -28,8 +34,14 @@ def get_db_engine():
     Returns:
         SQLAlchemy engine object
     """
-    connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
-    return create_engine(connection_string)
+    try:
+        connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+        logger.debug(f"Creating DB engine for {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
+        return create_engine(connection_string)
+    except Exception as e:
+        logger.error(f"Failed to create database engine: {str(e)}")
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        raise
 
 
 @st.cache_data(ttl=600)  # Cache for 10 minutes
@@ -92,7 +104,7 @@ def get_available_laps(track_name: str, limit: int = 100) -> pd.DataFrame:
     SELECT
         l.lap_id,
         l.lap_number,
-        l.lap_duration,
+        COALESCE(l.lap_duration, 0.0) as lap_duration,
         l.vehicle_id,
         v.car_number,
         EXISTS (
@@ -110,15 +122,21 @@ def get_available_laps(track_name: str, limit: int = 100) -> pd.DataFrame:
     LEFT JOIN telemetry_readings tr ON l.lap_id = tr.lap_id
     WHERE t.track_name = %s
       AND l.lap_number < 32768
-      AND l.lap_duration IS NOT NULL
+      AND l.lap_number > 0
     GROUP BY l.lap_id, l.lap_number, l.lap_duration, l.vehicle_id, v.car_number
-    ORDER BY l.lap_duration ASC
+    HAVING COUNT(tr.telemetry_id) > 0
+    ORDER BY l.lap_number ASC
     LIMIT %s;
     """
 
-    engine = get_db_engine()
-    df = pd.read_sql(query, engine, params=(track_name, limit))
-    return df
+    try:
+        engine = get_db_engine()
+        df = pd.read_sql(query, engine, params=(track_name, limit))
+        logger.info(f"Loaded {len(df)} laps for track '{track_name}'")
+        return df
+    except Exception as e:
+        log_exception(logger, e, f"Error loading laps for track '{track_name}'")
+        raise
 
 
 @st.cache_data(ttl=600)
@@ -154,6 +172,8 @@ def load_lap_telemetry(lap_id: int) -> pd.DataFrame:
     """
 
     engine = get_db_engine()
+    # Convert numpy.int64 to Python int (psycopg2 compatibility)
+    lap_id = int(lap_id)
     df = pd.read_sql(query, engine, params=(lap_id,))
     return df
 
@@ -169,6 +189,8 @@ def load_lap_gps(lap_id: int) -> Optional[pd.DataFrame]:
     Returns:
         DataFrame with columns: latitude, longitude, speed (or None if no GPS data)
     """
+    log_data_operation(logger, "load_lap_gps", lap_id=lap_id)
+
     query = """
     SELECT
         vbox_lat_min as latitude,
@@ -182,11 +204,22 @@ def load_lap_gps(lap_id: int) -> Optional[pd.DataFrame]:
     ORDER BY meta_time;
     """
 
-    engine = get_db_engine()
-    df = pd.read_sql(query, engine, params=(lap_id,))
-    if df.empty:
-        return None
-    return df
+    try:
+        engine = get_db_engine()
+        # Convert numpy.int64 to Python int (psycopg2 compatibility)
+        lap_id = int(lap_id)
+        df = pd.read_sql(query, engine, params=(lap_id,))
+
+        if df.empty:
+            logger.warning(f"No GPS data available for lap_id={lap_id}")
+            return None
+
+        logger.info(f"Loaded {len(df)} GPS points for lap_id={lap_id}")
+        return df
+
+    except Exception as e:
+        log_exception(logger, e, f"Error loading GPS data for lap_id={lap_id}")
+        raise
 
 
 @st.cache_data(ttl=600)
@@ -223,6 +256,8 @@ def get_vehicle_stats(vehicle_id: int) -> Dict:
     """
 
     engine = get_db_engine()
+    # Convert numpy.int64 to Python int (psycopg2 compatibility)
+    vehicle_id = int(vehicle_id)
     df = pd.read_sql(query, engine, params=(vehicle_id,))
     if df.empty:
         return {}
@@ -260,46 +295,48 @@ def get_lap_features(lap_id: int) -> Optional[pd.Series]:
     Returns:
         Series with 23 features ready for ML model prediction (or None if unavailable)
     """
+    log_data_operation(logger, "get_lap_features", lap_id=lap_id)
+
     query = """
     SELECT
-        -- Weather features
-        COALESCE(wd.air_temp, 25.0) as air_temp,
-        COALESCE(wd.track_temp, 30.0) as track_temp,
-        COALESCE(wd.humidity, 50.0) as humidity,
-        COALESCE(wd.wind_speed, 5.0) as wind_speed,
-        COALESCE(wd.track_temp - wd.air_temp, 5.0) as temp_delta,
+        -- Weather features (with defaults if no weather data)
+        COALESCE(MAX(wd.air_temp), 25.0) as air_temp,
+        COALESCE(MAX(wd.track_temp), 30.0) as track_temp,
+        COALESCE(MAX(wd.humidity), 50.0) as humidity,
+        COALESCE(MAX(wd.wind_speed), 5.0) as wind_speed,
+        COALESCE(MAX(wd.track_temp) - MAX(wd.air_temp), 5.0) as temp_delta,
 
         -- Brake pressure features
-        AVG(tr.pbrake_f) as avg_brake_front,
-        MAX(tr.pbrake_f) as max_brake_front,
-        AVG(tr.pbrake_r) as avg_brake_rear,
-        MAX(tr.pbrake_r) as max_brake_rear,
+        COALESCE(AVG(tr.pbrake_f), 0.0) as avg_brake_front,
+        COALESCE(MAX(tr.pbrake_f), 0.0) as max_brake_front,
+        COALESCE(AVG(tr.pbrake_r), 0.0) as avg_brake_rear,
+        COALESCE(MAX(tr.pbrake_r), 0.0) as max_brake_rear,
 
         -- G-force features
-        AVG(ABS(tr.accy_can)) as avg_lateral_g,
-        MAX(ABS(tr.accy_can)) as max_lateral_g,
-        AVG(tr.accx_can) as avg_long_g,
-        MAX(tr.accx_can) as max_accel_g,
-        MIN(tr.accx_can) as max_brake_g,
+        COALESCE(AVG(ABS(tr.accy_can)), 0.0) as avg_lateral_g,
+        COALESCE(MAX(ABS(tr.accy_can)), 0.0) as max_lateral_g,
+        COALESCE(AVG(tr.accx_can), 0.0) as avg_long_g,
+        COALESCE(MAX(tr.accx_can), 0.0) as max_accel_g,
+        COALESCE(MIN(tr.accx_can), 0.0) as max_brake_g,
 
         -- Steering features
-        STDDEV(tr.steering_angle) as steering_variance,
-        AVG(ABS(tr.steering_angle)) as avg_steering_angle,
+        COALESCE(STDDEV(tr.steering_angle), 0.0) as steering_variance,
+        COALESCE(AVG(ABS(tr.steering_angle)), 0.0) as avg_steering_angle,
 
         -- Throttle features
-        AVG(tr.ath) as avg_throttle_blade,
+        COALESCE(AVG(tr.ath), 0.0) as avg_throttle_blade,
 
         -- Speed features
-        AVG(tr.speed) as avg_speed,
-        MAX(tr.speed) as max_speed,
-        MIN(tr.speed) as min_speed,
+        COALESCE(AVG(tr.speed), 0.0) as avg_speed,
+        COALESCE(MAX(tr.speed), 0.0) as max_speed,
+        COALESCE(MIN(tr.speed), 0.0) as min_speed,
 
         -- Engine features
-        AVG(tr.nmot) as avg_rpm,
-        MAX(tr.nmot) as max_rpm,
+        COALESCE(AVG(tr.nmot), 0.0) as avg_rpm,
+        COALESCE(MAX(tr.nmot), 0.0) as max_rpm,
 
         -- Stint position (approximate from lap number)
-        l.lap_number % 15 as lap_in_stint
+        l.lap_number %% 15 as lap_in_stint
 
     FROM laps l
     LEFT JOIN telemetry_readings tr ON l.lap_id = tr.lap_id
@@ -307,14 +344,61 @@ def get_lap_features(lap_id: int) -> Optional[pd.Series]:
     LEFT JOIN races r ON s.race_id = r.race_id
     LEFT JOIN weather_data wd ON r.race_id = wd.race_id
     WHERE l.lap_id = %s
-    GROUP BY l.lap_id, l.lap_number, wd.air_temp, wd.track_temp, wd.humidity, wd.wind_speed;
+    GROUP BY l.lap_id, l.lap_number;
     """
 
-    engine = get_db_engine()
-    df = pd.read_sql(query, engine, params=(lap_id,))
-    if df.empty:
-        return None
-    return df.iloc[0]
+    try:
+        engine = get_db_engine()
+        # Convert numpy.int64 to Python int (psycopg2 compatibility)
+        lap_id = int(lap_id)
+        # Query uses lap_id once
+        df = pd.read_sql(query, engine, params=(lap_id,))
+
+        logger.debug(f"Query returned {len(df)} rows for lap_id={lap_id}")
+
+        # Validate query results
+        if df.empty or len(df) == 0:
+            logger.warning(f"No data returned for lap_id={lap_id}")
+            return None
+
+        logger.debug(f"DataFrame shape: {df.shape}, columns: {df.columns.tolist()}")
+        logger.debug(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+
+        # Access first row safely
+        try:
+            result = df.iloc[0]
+            logger.debug(f"Successfully accessed first row, type: {type(result)}")
+        except IndexError as e:
+            logger.error(f"IndexError accessing first row: {str(e)}")
+            logger.error(f"DataFrame info: shape={df.shape}, empty={df.empty}")
+            return None
+
+        # Check if result is a tuple (invalid) or has too many null values
+        if isinstance(result, tuple):
+            logger.error(f"Result is a tuple (expected pd.Series): {result}")
+            return None
+
+        # Check if most features are null (indicates bad data)
+        null_count = result.isnull().sum()
+        total_count = len(result)
+        null_percentage = null_count / total_count if total_count > 0 else 0
+
+        logger.debug(f"Null values: {null_count}/{total_count} ({null_percentage:.1%})")
+
+        if null_percentage > 0.5:  # More than 50% null
+            logger.warning(f"Too many null values ({null_percentage:.1%}) for lap_id={lap_id}")
+            logger.debug(f"Null columns: {result[result.isnull()].index.tolist()}")
+            return None
+
+        logger.info(f"Successfully loaded {total_count} features for lap_id={lap_id}")
+        return result
+
+    except SQLAlchemyError as e:
+        log_exception(logger, e, f"Database error while loading features for lap_id={lap_id}")
+        raise
+    except Exception as e:
+        log_exception(logger, e, f"Unexpected error while loading features for lap_id={lap_id}")
+        raise
 
 
 @st.cache_data(ttl=600)
@@ -376,6 +460,8 @@ def get_lap_metadata(lap_id: int) -> Dict:
     """
 
     engine = get_db_engine()
+    # Convert numpy.int64 to Python int (psycopg2 compatibility)
+    lap_id = int(lap_id)
     df = pd.read_sql(query, engine, params=(lap_id,))
     if df.empty:
         return {}

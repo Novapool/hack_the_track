@@ -12,6 +12,11 @@ import joblib
 import json
 from pathlib import Path
 from typing import Dict, Tuple, List
+import traceback
+from .logger import setup_logger, log_exception
+
+# Setup logger
+logger = setup_logger("model_predictor")
 
 
 # Feature names (23 features in order expected by model)
@@ -32,18 +37,36 @@ def load_model():
     Returns:
         Tuple of (model, metadata_dict)
     """
-    project_root = Path(__file__).parent.parent.parent
-    model_path = project_root / "models" / "tire_degradation_model_random_forest_with_weather.pkl"
-    metadata_path = project_root / "models" / "model_metadata_with_weather.json"
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        model_path = project_root / "models" / "tire_degradation_model_random_forest_with_weather.pkl"
+        metadata_path = project_root / "models" / "model_metadata_with_weather.json"
 
-    # Load model
-    model = joblib.load(model_path)
+        logger.debug(f"Loading model from: {model_path}")
+        logger.debug(f"Loading metadata from: {metadata_path}")
 
-    # Load metadata
-    with open(metadata_path, 'r') as f:
-        metadata = json.load(f)
+        if not model_path.exists():
+            logger.error(f"Model file not found: {model_path}")
+            raise FileNotFoundError(f"Model file not found: {model_path}")
 
-    return model, metadata
+        if not metadata_path.exists():
+            logger.error(f"Metadata file not found: {metadata_path}")
+            raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
+
+        # Load model
+        model = joblib.load(model_path)
+        logger.info(f"Model loaded successfully: {type(model).__name__}")
+
+        # Load metadata
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        logger.info(f"Metadata loaded successfully: {len(metadata)} keys")
+
+        return model, metadata
+
+    except Exception as e:
+        log_exception(logger, e, "Failed to load model or metadata")
+        raise
 
 
 def predict_degradation(features_df: pd.DataFrame) -> np.ndarray:
@@ -56,15 +79,60 @@ def predict_degradation(features_df: pd.DataFrame) -> np.ndarray:
     Returns:
         Array of predictions (tire degradation in seconds/lap)
     """
-    model, _ = load_model()
+    try:
+        logger.debug(f"Predicting degradation for {len(features_df)} samples")
+        logger.debug(f"Input features shape: {features_df.shape}, columns: {features_df.columns.tolist()}")
 
-    # Ensure features are in correct order
-    features_ordered = features_df[FEATURE_NAMES]
+        model, _ = load_model()
 
-    # Make predictions
-    predictions = model.predict(features_ordered)
+        # Validate features
+        missing_features = [f for f in FEATURE_NAMES if f not in features_df.columns]
+        if missing_features:
+            logger.error(f"Missing features: {missing_features}")
+            raise ValueError(f"Missing required features: {missing_features}")
 
-    return predictions
+        # Ensure features are in correct order
+        features_ordered = features_df[FEATURE_NAMES].copy()
+
+        # Check for NaN values and fill with 0
+        if features_ordered.isnull().any().any():
+            null_cols = features_ordered.columns[features_ordered.isnull().any()].tolist()
+
+            # avg_throttle_blade NaN is expected (some telemetry doesn't have this sensor)
+            if null_cols == ['avg_throttle_blade']:
+                logger.debug(f"Expected NaN in avg_throttle_blade column, filling with 0")
+            else:
+                logger.warning(f"NaN values found in features: {null_cols}")
+                logger.debug(f"NaN counts per column: {features_ordered.isnull().sum()[features_ordered.isnull().sum() > 0].to_dict()}")
+
+            # Fill NaN with 0 and convert to numeric to avoid pandas FutureWarning
+            # Convert object columns to numeric first, then fill NaN
+            for col in features_ordered.columns:
+                if features_ordered[col].dtype == 'object':
+                    features_ordered[col] = pd.to_numeric(features_ordered[col], errors='coerce')
+            features_ordered = features_ordered.fillna(0)
+
+        # Check for infinite values (convert to numeric first to avoid type errors)
+        try:
+            features_numeric = features_ordered.apply(pd.to_numeric, errors='coerce')
+            if np.isinf(features_numeric.values).any():
+                logger.warning("Infinite values found in features")
+                # Replace inf with large finite values
+                features_ordered = features_ordered.replace([np.inf, -np.inf], [1e10, -1e10])
+                logger.debug("Replaced infinite values")
+        except Exception as e:
+            logger.debug(f"Could not check for infinite values: {e}")
+
+        # Make predictions
+        predictions = model.predict(features_ordered)
+
+        logger.info(f"Predictions: min={predictions.min():.3f}, max={predictions.max():.3f}, mean={predictions.mean():.3f}")
+
+        return predictions
+
+    except Exception as e:
+        log_exception(logger, e, "Error making predictions")
+        raise
 
 
 def predict_lap_degradation(lap_features: pd.Series) -> float:
@@ -77,13 +145,31 @@ def predict_lap_degradation(lap_features: pd.Series) -> float:
     Returns:
         Predicted tire degradation (seconds/lap)
     """
-    # Convert Series to DataFrame (single row)
-    features_df = pd.DataFrame([lap_features])
+    try:
+        logger.debug(f"Predicting single lap degradation, features type: {type(lap_features)}")
 
-    # Get prediction
-    prediction = predict_degradation(features_df)[0]
+        # Check if lap_features is actually a tuple (common error)
+        if isinstance(lap_features, tuple):
+            logger.error(f"lap_features is a tuple (expected pd.Series): {lap_features}")
+            raise TypeError(f"Expected pd.Series but got tuple: {lap_features}")
 
-    return prediction
+        # Convert Series to DataFrame (single row)
+        features_df = pd.DataFrame([lap_features])
+        logger.debug(f"Created DataFrame with shape: {features_df.shape}")
+
+        # Get prediction
+        prediction = predict_degradation(features_df)[0]
+
+        logger.info(f"Single lap prediction: {prediction:.3f} sec/lap")
+
+        return prediction
+
+    except IndexError as e:
+        log_exception(logger, e, "IndexError in predict_lap_degradation - possibly empty prediction array")
+        raise
+    except Exception as e:
+        log_exception(logger, e, "Error in predict_lap_degradation")
+        raise
 
 
 def what_if_prediction(base_features: pd.Series, adjustments: Dict[str, float]) -> Tuple[float, float, pd.Series]:
@@ -154,7 +240,9 @@ def calculate_efficiency_score(lap_time: float, degradation: float) -> float:
         Efficiency score (normalized metric)
     """
     # Avoid division by zero
-    if degradation <= 0:
+    if lap_time <= 0 or lap_time is None:
+        lap_time = 1.0  # Default to prevent division by zero
+    if degradation <= 0 or degradation is None:
         degradation = 0.01
 
     # Efficiency = speed per unit of tire wear
