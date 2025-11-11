@@ -16,6 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from utils.data_loader import (
     get_available_tracks,
     get_available_laps,
+    get_representative_laps,
     get_lap_features,
     get_lap_metadata
 )
@@ -40,7 +41,6 @@ with st.sidebar:
 
     # Track selector
     try:
-        from utils.data_loader import get_available_tracks
         tracks_df = get_available_tracks()
         track_options = tracks_df['track_name'].tolist()
 
@@ -49,26 +49,54 @@ with st.sidebar:
             options=track_options
         )
 
-        # Lap selector
-        laps_df = get_available_laps(selected_track, limit=30)
+        # Advanced mode toggle
+        show_advanced = st.checkbox("🔧 Advanced Mode (show all laps)", value=False)
 
-        if laps_df.empty:
-            st.warning(f"No laps for {selected_track}")
-            st.stop()
+        if show_advanced:
+            # Show all laps (original behavior)
+            laps_df = get_available_laps(selected_track, limit=50)
 
-        lap_options = []
-        for _, lap in laps_df.iterrows():
-            lap_label = f"Lap #{lap['lap_number']} - {lap['lap_duration']:.2f}s (Car {lap['car_number']})"
-            lap_options.append((lap_label, lap['lap_id']))
+            if laps_df.empty:
+                st.warning(f"No laps for {selected_track}")
+                st.stop()
 
-        selected_lap_label = st.selectbox(
-            "Lap",
-            options=[label for label, _ in lap_options]
-        )
+            lap_options = []
+            for _, lap in laps_df.iterrows():
+                lap_label = f"Lap #{lap['lap_number']} - {lap['lap_duration']:.2f}s (Car {lap['car_number']})"
+                lap_options.append((lap_label, lap['lap_id']))
 
-        selected_lap_id = next(lid for label, lid in lap_options if label == selected_lap_label)
+            selected_lap_label = st.selectbox(
+                "Lap",
+                options=[label for label, _ in lap_options]
+            )
+
+            selected_lap_id = next(lid for label, lid in lap_options if label == selected_lap_label)
+
+        else:
+            # Show representative laps (simplified)
+            st.info("📊 Showing 3 representative laps for this track")
+
+            rep_laps_df = get_representative_laps(selected_track)
+
+            if rep_laps_df.empty:
+                st.warning(f"No representative laps found for {selected_track}")
+                st.stop()
+
+            # Create lap options with lap_type as primary label
+            lap_options = []
+            for _, lap in rep_laps_df.iterrows():
+                lap_label = f"{lap['lap_type']}: {lap['lap_duration']:.2f}s (Lap #{lap['lap_number']}, Car {lap['car_number']})"
+                lap_options.append((lap_label, lap['lap_id']))
+
+            selected_lap_label = st.selectbox(
+                "Representative Lap",
+                options=[label for label, _ in lap_options],
+                help="Fast = Top 10% | Average = Median | Slow = Bottom 10-20%"
+            )
+
+            selected_lap_id = next(lid for label, lid in lap_options if label == selected_lap_label)
+
         lap_meta = get_lap_metadata(selected_lap_id)
-
         st.success(f"✅ Base lap selected")
 
     except Exception as e:
@@ -96,38 +124,53 @@ st.header(f"🔧 Adjust Driving Parameters - {selected_track.title()}")
 # Adjustment sliders
 st.subheader("🎚️ Interactive Controls")
 
+# Show feature importance info
+with st.expander("ℹ️ Feature Sensitivity Guide", expanded=False):
+    st.markdown("""
+    **Most Impactful Adjustments** (based on model feature importance):
+    - 🔄 **Steering Smoothness** (24% importance) - Smooth inputs reduce tire stress
+    - 🌡️ **Temperature/Weather** (18% combined) - Track conditions matter
+    - 💨 **Lateral G-forces** (corner speed) - Affects edge wear
+
+    **Lower Impact Adjustments**:
+    - 🛑 Brake pressure - Model shows minimal correlation
+    - ⚡ Throttle - Low importance in training data
+
+    *Note: Small slider changes (5-10%) may show minimal delta due to model learning.*
+    """)
+
 col1, col2 = st.columns(2)
 
 with col1:
-    brake_adj = st.slider(
-        "🛑 Brake Pressure Adjustment",
+    lateral_g_adj = st.slider(
+        "🔄 Cornering Aggression (Lateral G)",
         min_value=-30,
         max_value=30,
         value=0,
         step=5,
         format="%d%%",
-        help="Adjust average brake pressure. Negative = softer braking"
+        help="Adjust lateral G-forces (cornering speed). Higher = more aggressive cornering."
     )
 
     steering_adj = st.slider(
-        "🔄 Steering Smoothness",
+        "🎯 Steering Smoothness",
         min_value=-40,
         max_value=40,
         value=0,
         step=5,
         format="%d%%",
-        help="Adjust steering variance. Negative = smoother inputs"
+        help="Adjust steering variance. Negative = smoother inputs (MOST IMPACTFUL)"
     )
 
 with col2:
-    speed_adj = st.slider(
-        "💨 Cornering Speed",
-        min_value=-20,
-        max_value=20,
+    brake_adj = st.slider(
+        "🛑 Brake Pressure",
+        min_value=-30,
+        max_value=30,
         value=0,
         step=5,
         format="%d%%",
-        help="Adjust average speed (simulates cornering speed changes)"
+        help="Adjust brake pressure (low model impact)"
     )
 
     throttle_adj = st.slider(
@@ -137,26 +180,34 @@ with col2:
         value=0,
         step=5,
         format="%d%%",
-        help="Adjust throttle blade position"
+        help="Adjust throttle blade position (low model impact)"
     )
 
 st.markdown("---")
 
-# Make predictions
+# Make predictions (force recomputation on any slider change)
+# Create unique key based on all slider values to ensure predictions update
+prediction_key = f"{brake_adj}_{steering_adj}_{lateral_g_adj}_{throttle_adj}"
+
 adjustments = {}
+
+if lateral_g_adj != 0:
+    adjustments['avg_lateral_g'] = lateral_g_adj
+    adjustments['max_lateral_g'] = lateral_g_adj
+
+if steering_adj != 0:
+    adjustments['steering_variance'] = steering_adj
 
 if brake_adj != 0:
     adjustments['avg_brake_front'] = brake_adj
     adjustments['max_brake_front'] = brake_adj
 
-if steering_adj != 0:
-    adjustments['steering_variance'] = steering_adj
-
-if speed_adj != 0:
-    adjustments['avg_speed'] = speed_adj
-
 if throttle_adj != 0:
     adjustments['avg_throttle_blade'] = throttle_adj
+
+# Display active adjustments for debugging
+if adjustments:
+    st.info(f"🔧 Active adjustments: {', '.join([f'{k}: {v:+}%' for k, v in adjustments.items()])}")
 
 try:
     baseline_pred, adjusted_pred, modified_features = what_if_prediction(
@@ -188,20 +239,26 @@ try:
 
     with col3:
         delta = adjusted_pred - baseline_pred
-        delta_pct = (delta / baseline_pred * 100) if baseline_pred != 0 else 0
+        delta_pct = (delta / abs(baseline_pred) * 100) if baseline_pred != 0 else 0
 
+        # Use Streamlit's delta parameter to show direction
         st.metric(
             label="📈 Delta (Change)",
             value=f"{delta:+.3f} sec/lap",
-            delta=f"{delta_pct:+.1f}%"
+            delta=f"{delta_pct:+.1f}%",
+            delta_color="inverse"  # Red for increase (bad), green for decrease (good)
         )
 
+        # Clear interpretation
         if delta < -0.05:
-            st.success("✅ Improvement!")
+            st.success("✅ **Improvement!** Less tire wear")
         elif delta > 0.05:
-            st.warning("⚠️ Increased wear")
+            st.warning("⚠️ **Increased wear** More tire degradation")
         else:
-            st.info("ℹ️ Minimal change")
+            st.info("ℹ️ **Minimal change** (~same wear rate)")
+
+        # Additional context
+        st.caption(f"Prediction key: {prediction_key}")
 
     st.markdown("---")
 
@@ -221,10 +278,11 @@ try:
     comparison_data = []
 
     feature_labels = {
+        'avg_lateral_g': 'Avg Lateral G (Cornering)',
+        'max_lateral_g': 'Max Lateral G',
+        'steering_variance': 'Steering Variance',
         'avg_brake_front': 'Avg Brake Pressure',
         'max_brake_front': 'Max Brake Pressure',
-        'steering_variance': 'Steering Variance',
-        'avg_speed': 'Average Speed',
         'avg_throttle_blade': 'Throttle Blade'
     }
 

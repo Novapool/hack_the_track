@@ -104,7 +104,10 @@ def get_available_laps(track_name: str, limit: int = 100) -> pd.DataFrame:
     SELECT
         l.lap_id,
         l.lap_number,
-        COALESCE(l.lap_duration, 0.0) as lap_duration,
+        COALESCE(
+            l.lap_duration,
+            EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time))
+        ) as lap_duration,
         l.vehicle_id,
         v.car_number,
         EXISTS (
@@ -123,7 +126,9 @@ def get_available_laps(track_name: str, limit: int = 100) -> pd.DataFrame:
     WHERE t.track_name = %s
       AND l.lap_number < 32768
       AND l.lap_number > 0
-    GROUP BY l.lap_id, l.lap_number, l.lap_duration, l.vehicle_id, v.car_number
+      AND l.lap_start_time IS NOT NULL
+      AND l.lap_end_time IS NOT NULL
+    GROUP BY l.lap_id, l.lap_number, l.lap_duration, l.lap_start_time, l.lap_end_time, l.vehicle_id, v.car_number
     HAVING COUNT(tr.telemetry_id) > 0
     ORDER BY l.lap_number ASC
     LIMIT %s;
@@ -466,3 +471,165 @@ def get_lap_metadata(lap_id: int) -> Dict:
     if df.empty:
         return {}
     return df.iloc[0].to_dict()
+
+
+@st.cache_data(ttl=600)
+def get_representative_laps(track_name: str) -> pd.DataFrame:
+    """
+    Get representative laps for a track (fast, average, slow).
+
+    Returns 3 representative laps per track:
+    - Fast lap: Median of fastest 10% of laps
+    - Average lap: Median lap time
+    - Slow lap: Median of slowest 10% of laps
+
+    Args:
+        track_name: Name of the track (e.g., 'barber', 'cota')
+
+    Returns:
+        DataFrame with columns: lap_type, lap_id, lap_number, lap_duration, vehicle_id, car_number
+    """
+    log_data_operation(logger, "get_representative_laps", track_name=track_name)
+
+    query = """
+    WITH lap_times AS (
+        SELECT
+            l.lap_id,
+            l.lap_number,
+            COALESCE(
+                l.lap_duration,
+                EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time))
+            ) as lap_duration,
+            l.vehicle_id,
+            v.car_number,
+            NTILE(10) OVER (ORDER BY COALESCE(
+                l.lap_duration,
+                EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time))
+            )) as decile
+        FROM laps l
+        JOIN sessions s ON l.session_id = s.session_id
+        JOIN races r ON s.race_id = r.race_id
+        JOIN tracks t ON r.track_id = t.track_id
+        LEFT JOIN vehicles v ON l.vehicle_id = v.vehicle_id
+        WHERE t.track_name = %s
+          AND l.lap_number < 32768
+          AND l.lap_number > 0
+          AND l.lap_start_time IS NOT NULL
+          AND l.lap_end_time IS NOT NULL
+          AND COALESCE(
+              l.lap_duration,
+              EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time))
+          ) > 0
+    ),
+    representative AS (
+        SELECT
+            'Fast Lap' as lap_type,
+            1 as sort_order,
+            lap_id,
+            lap_number,
+            lap_duration,
+            vehicle_id,
+            car_number,
+            ROW_NUMBER() OVER (PARTITION BY decile ORDER BY lap_duration) as rn
+        FROM lap_times
+        WHERE decile = 1  -- Fastest 10%
+        UNION ALL
+        SELECT
+            'Average Lap' as lap_type,
+            2 as sort_order,
+            lap_id,
+            lap_number,
+            lap_duration,
+            vehicle_id,
+            car_number,
+            ROW_NUMBER() OVER (PARTITION BY decile ORDER BY lap_duration) as rn
+        FROM lap_times
+        WHERE decile = 5  -- Middle 50%
+        UNION ALL
+        SELECT
+            'Slow Lap' as lap_type,
+            3 as sort_order,
+            lap_id,
+            lap_number,
+            lap_duration,
+            vehicle_id,
+            car_number,
+            ROW_NUMBER() OVER (PARTITION BY decile ORDER BY lap_duration) as rn
+        FROM lap_times
+        WHERE decile = 9  -- Slowest 10-20%
+    )
+    SELECT
+        lap_type,
+        lap_id,
+        lap_number,
+        lap_duration,
+        vehicle_id,
+        car_number
+    FROM representative
+    WHERE rn = 1  -- Get median lap from each decile
+    ORDER BY sort_order;
+    """
+
+    try:
+        engine = get_db_engine()
+        df = pd.read_sql(query, engine, params=(track_name,))
+
+        if df.empty:
+            logger.warning(f"No representative laps found for track '{track_name}'")
+            return pd.DataFrame()
+
+        logger.info(f"Loaded {len(df)} representative laps for track '{track_name}'")
+        return df
+
+    except Exception as e:
+        log_exception(logger, e, f"Error loading representative laps for track '{track_name}'")
+        raise
+
+
+@st.cache_data(ttl=600)
+def get_gps_availability(track_name: str) -> Dict:
+    """
+    Get GPS availability statistics for a track.
+
+    Args:
+        track_name: Name of the track
+
+    Returns:
+        Dictionary with total_laps, laps_with_gps, gps_coverage_pct
+    """
+    query = """
+    SELECT
+        COUNT(DISTINCT l.lap_id) as total_laps,
+        COUNT(DISTINCT CASE WHEN EXISTS (
+            SELECT 1 FROM telemetry_readings tr
+            WHERE tr.lap_id = l.lap_id
+            AND tr.vbox_lat_min IS NOT NULL
+            LIMIT 1
+        ) THEN l.lap_id END) as laps_with_gps
+    FROM laps l
+    JOIN sessions s ON l.session_id = s.session_id
+    JOIN races r ON s.race_id = r.race_id
+    JOIN tracks t ON r.track_id = t.track_id
+    WHERE t.track_name = %s
+      AND l.lap_number < 32768
+      AND l.lap_number > 0;
+    """
+
+    try:
+        engine = get_db_engine()
+        df = pd.read_sql(query, engine, params=(track_name,))
+
+        if df.empty:
+            return {'total_laps': 0, 'laps_with_gps': 0, 'gps_coverage_pct': 0.0}
+
+        result = df.iloc[0].to_dict()
+        result['gps_coverage_pct'] = (
+            (result['laps_with_gps'] / result['total_laps'] * 100)
+            if result['total_laps'] > 0 else 0.0
+        )
+
+        return result
+
+    except Exception as e:
+        log_exception(logger, e, f"Error getting GPS availability for track '{track_name}'")
+        return {'total_laps': 0, 'laps_with_gps': 0, 'gps_coverage_pct': 0.0}

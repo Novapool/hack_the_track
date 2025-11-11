@@ -13,7 +13,7 @@ import numpy as np
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from utils.data_loader import get_all_vehicles, get_vehicle_stats
+from utils.data_loader import get_all_vehicles, get_vehicle_stats, get_available_tracks
 from utils.model_predictor import calculate_efficiency_score
 from utils.track_plotter import create_radar_chart, create_comparison_table
 
@@ -43,11 +43,39 @@ except Exception as e:
 with st.sidebar:
     st.header("🎛️ Select Drivers")
 
-    # Create vehicle options
+    # Track filter
+    st.subheader("🏁 Track Filter")
+
+    try:
+        tracks_df = get_available_tracks()
+        track_options = ["All Tracks"] + tracks_df['track_name'].tolist()
+
+        selected_track_filter = st.selectbox(
+            "Compare on track:",
+            options=track_options,
+            index=0,
+            help="Select specific track for apples-to-apples comparison"
+        )
+
+        if selected_track_filter == "All Tracks":
+            st.warning("⚠️ Comparing across all tracks (may be misleading)")
+        else:
+            st.info(f"📍 Track-specific comparison: {selected_track_filter}")
+
+    except Exception as e:
+        st.error(f"Error loading tracks: {e}")
+        selected_track_filter = "All Tracks"
+
+    st.markdown("---")
+    st.subheader("🏎️ Select Drivers")
+
+    # Create vehicle options (store as list of tuples with label and integer vehicle_id)
     vehicle_options = []
     for _, vehicle in vehicles_df.iterrows():
         label = f"Car #{vehicle['car_number']} ({vehicle['total_laps']} laps)"
-        vehicle_options.append((label, vehicle['vehicle_id']))
+        # Ensure vehicle_id is an integer (convert if needed)
+        vid = int(vehicle['vehicle_id']) if not isinstance(vehicle['vehicle_id'], int) else vehicle['vehicle_id']
+        vehicle_options.append((label, vid))
 
     # Driver 1 selector
     driver1_label = st.selectbox(
@@ -55,6 +83,7 @@ with st.sidebar:
         options=[label for label, _ in vehicle_options],
         index=0
     )
+    # Extract the integer vehicle_id
     driver1_id = next(vid for label, vid in vehicle_options if label == driver1_label)
 
     # Driver 2 selector
@@ -63,6 +92,7 @@ with st.sidebar:
         options=[label for label, _ in vehicle_options],
         index=min(1, len(vehicle_options) - 1)
     )
+    # Extract the integer vehicle_id
     driver2_id = next(vid for label, vid in vehicle_options if label == driver2_label)
 
     if driver1_id == driver2_id:
@@ -71,8 +101,8 @@ with st.sidebar:
     st.markdown("---")
     st.info("""
     **Efficiency Score:**
-    Higher score = better tire management
-    (faster lap times with less tire wear)
+    Calculated from actual driving metrics
+    (speed / (braking + steering variance))
     """)
 
 # Load driver stats
@@ -200,20 +230,29 @@ st.markdown("---")
 st.header("⚡ Tire Management Efficiency")
 
 try:
-    # Calculate efficiency scores (using dummy degradation for now)
-    # In production, would calculate from actual lap degradation data
-    avg_degradation_driver1 = 0.4  # Placeholder
-    avg_degradation_driver2 = 0.45  # Placeholder
+    # Calculate efficiency scores from actual driving metrics
+    # Formula: speed / (braking + steering_variance + 1)
+    # Higher speed with lower braking/steering variance = better efficiency
 
-    efficiency1 = calculate_efficiency_score(
-        driver1_stats['avg_lap_time'],
-        avg_degradation_driver1
-    )
+    def calculate_real_efficiency(stats):
+        """Calculate efficiency from driving metrics"""
+        avg_speed = stats.get('avg_speed', 0) or 0
+        avg_brake = stats.get('avg_brake_front', 0) or 0
+        steering_var = stats.get('steering_variance', 0) or 0
 
-    efficiency2 = calculate_efficiency_score(
-        driver2_stats['avg_lap_time'],
-        avg_degradation_driver2
-    )
+        # Normalize to 0-1 scale
+        # Typical values: speed ~130 km/h, brake ~10 bar, steering_var ~40
+        speed_normalized = min(avg_speed / 200.0, 1.0)
+        brake_normalized = min(avg_brake / 100.0, 1.0)
+        steering_normalized = min(steering_var / 100.0, 1.0)
+
+        # Calculate efficiency: higher speed, lower braking/steering = better
+        efficiency = speed_normalized / (brake_normalized + steering_normalized + 0.1)
+
+        return efficiency
+
+    efficiency1 = calculate_real_efficiency(driver1_stats)
+    efficiency2 = calculate_real_efficiency(driver2_stats)
 
     col1, col2, col3 = st.columns(3)
 

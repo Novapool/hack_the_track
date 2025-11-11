@@ -10,7 +10,7 @@ SELECT
     l.session_id,
     l.vehicle_id,
     l.lap_number,
-    l.lap_duration as lap_time_seconds,
+    EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time)) as lap_time_seconds,
     r.track_id,
     r.race_date,
 
@@ -67,11 +67,15 @@ LEFT JOIN LATERAL (
     ORDER BY ABS(EXTRACT(EPOCH FROM (w2.timestamp - l.lap_start_time)))
     LIMIT 1
 ) w ON true
-WHERE l.lap_duration > 0
-  AND l.is_valid_lap = true
+WHERE l.is_valid_lap = true
   AND l.lap_number < 32768
+  AND l.lap_number > 0
+  AND l.lap_start_time IS NOT NULL
+  AND l.lap_end_time IS NOT NULL
+  AND EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time)) > 0
+  AND EXTRACT(EPOCH FROM (l.lap_end_time - l.lap_start_time)) < 300  -- Exclude laps > 5 minutes
 GROUP BY l.lap_id, s.race_id, l.session_id, l.vehicle_id, l.lap_number,
-         l.lap_duration, r.track_id, r.race_date,
+         l.lap_start_time, l.lap_end_time, r.track_id, r.race_date,
          w.air_temp, w.track_temp, w.humidity, w.wind_speed;
 
 -- View 2: Stint progression with degradation indicators

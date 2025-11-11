@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from utils.data_loader import (
     get_available_tracks,
     get_available_laps,
+    get_gps_availability,
     load_lap_telemetry,
     load_lap_gps,
     get_lap_features,
@@ -51,26 +52,72 @@ with st.sidebar:
             help="Choose a racing circuit to analyze"
         )
 
-        # Show track info
-        track_info = tracks_df[tracks_df['track_name'] == selected_track].iloc[0]
-        st.info(f"""
-        **Track Info:**
-        - Total Laps: {track_info['total_laps']:,}
-        - GPS Laps: {track_info['laps_with_gps']:,}
-        - GPS Coverage: {track_info['gps_coverage_pct']:.1f}%
-        """)
+        # Get GPS availability stats
+        gps_stats = get_gps_availability(selected_track)
+
+        # Show GPS availability
+        if gps_stats['laps_with_gps'] > 0:
+            st.success(f"""
+            **GPS Availability:**
+            - 📍 {gps_stats['laps_with_gps']:,} laps with GPS
+            - 📊 {gps_stats['gps_coverage_pct']:.1f}% coverage
+            - 🏁 {gps_stats['total_laps']:,} total laps
+            """)
+        else:
+            st.warning(f"""
+            **No GPS Data Available**
+            - {gps_stats['total_laps']:,} total laps
+            - Telemetry charts only
+            """)
 
     except Exception as e:
         st.error(f"Error loading tracks: {e}")
         st.stop()
 
+    # Lap filters
+    st.subheader("🔍 Filters")
+
+    show_gps_only = st.checkbox(
+        "📍 Show only laps with GPS",
+        value=True if gps_stats['laps_with_gps'] > 0 else False,
+        disabled=gps_stats['laps_with_gps'] == 0,
+        help="Filter to laps with GPS data for track visualization"
+    )
+
+    sort_by = st.radio(
+        "Sort by:",
+        options=["Fastest", "Slowest", "Most Recent"],
+        index=0,
+        help="How to order the lap list"
+    )
+
     # Lap selector
     try:
-        laps_df = get_available_laps(selected_track, limit=50)
+        # Load more laps since we're filtering
+        laps_df = get_available_laps(selected_track, limit=200)
 
         if laps_df.empty:
             st.warning(f"No laps available for {selected_track}")
             st.stop()
+
+        # Apply GPS filter
+        if show_gps_only:
+            laps_df = laps_df[laps_df['has_gps'] == True]
+
+            if laps_df.empty:
+                st.warning(f"No laps with GPS for {selected_track}")
+                st.stop()
+
+        # Apply sorting
+        if sort_by == "Fastest":
+            laps_df = laps_df.sort_values('lap_duration', ascending=True)
+        elif sort_by == "Slowest":
+            laps_df = laps_df.sort_values('lap_duration', ascending=False)
+        else:  # Most Recent
+            laps_df = laps_df.sort_values('lap_id', ascending=False)
+
+        # Limit to top 20 after sorting
+        laps_df = laps_df.head(20)
 
         # Create lap options with metadata
         lap_options = []
@@ -80,9 +127,9 @@ with st.sidebar:
             lap_options.append((lap_label, lap['lap_id']))
 
         selected_lap_label = st.selectbox(
-            "Select Lap",
+            f"Select Lap (showing top {len(laps_df)})",
             options=[label for label, _ in lap_options],
-            help="Choose a lap to visualize (📍 = GPS available)"
+            help="Choose a lap to visualize"
         )
 
         # Get selected lap ID
@@ -204,11 +251,21 @@ with col2:
 
             # Lap info
             with st.expander("ℹ️ Lap Info", expanded=False):
+                # Safely handle None values
+                lap_time = lap_meta.get('lap_duration', 0.0)
+                car_num = lap_meta.get('car_number', 'N/A')
+                track = lap_meta.get('track_name', 'Unknown')
+                race_date = lap_meta.get('race_date', 'N/A')
+
+                # Convert race_date to string if it's not None
+                race_date_str = str(race_date) if race_date is not None else 'N/A'
+                track_str = track.title() if track and hasattr(track, 'title') else str(track)
+
                 st.markdown(f"""
-                - **Lap Time**: {lap_meta['lap_duration']:.3f}s
-                - **Vehicle**: Car #{lap_meta['car_number']}
-                - **Track**: {lap_meta['track_name'].title()}
-                - **Date**: {lap_meta.get('race_date', 'N/A')}
+                - **Lap Time**: {lap_time:.3f}s
+                - **Vehicle**: Car #{car_num}
+                - **Track**: {track_str}
+                - **Date**: {race_date_str}
                 """)
 
         else:
